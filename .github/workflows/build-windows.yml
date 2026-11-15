@@ -2,6 +2,11 @@ name: Build Windows executable
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional tag to publish both ZIPs as a GitHub release
+        required: false
+        type: string
   push:
     paths:
       - "app.py"
@@ -12,7 +17,9 @@ on:
       - "alarm.mp3"
       - "faudio.mp3"
       - "paudio.mp3"
-      - ".github/workflows/build-windows.yml"
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -54,3 +61,18 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+      - name: Publish release
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: pwsh
+        run: |
+          gh release create "$env:RELEASE_TAG" `
+            dist/SmartStudyMonitor-Windows-x64.zip `
+            dist/SmartStudyMonitorLite-Windows-x64.zip `
+            --repo "$env:GITHUB_REPOSITORY" `
+            --title "Smart Study Monitor $env:RELEASE_TAG" `
+            --notes "Windows x64 standalone builds. SmartStudyMonitor is the original build; SmartStudyMonitorLite uses lower camera/inference resolution and checks for phones every third frame. Lite mode may have slower and less reliable phone detection." `
+            --target "$env:GITHUB_SHA"
