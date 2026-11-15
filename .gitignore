@@ -1,0 +1,29 @@
+# Python virtual environments
+.venv/
+venv/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Editor settings
+.vscode/
+.idea/
+.DS_Store
+.gradle/
+**/local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+/android/app/src/main/assets/efficientdet_lite0.tflite
+
+# PyInstaller output
+build/
+dist/
+/*.spec
+
+# Logs
+*.log

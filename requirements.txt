@@ -1,0 +1,6 @@
+opencv-python
+cvzone
+ultralytics
+pygame
+mediapipe
+pyinstaller

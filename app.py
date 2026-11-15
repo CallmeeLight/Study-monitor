@@ -1,140 +1,176 @@
+import sys
+from pathlib import Path
+
 import cv2
 import cvzone
 from cvzone.FaceMeshModule import FaceMeshDetector
 from ultralytics import YOLO
 import pygame
 
-# Initialize Pygame Mixer
-pygame.mixer.init()
-alarm_sleep = pygame.mixer.Sound("alarm.mp3")       # Sleep alarm
-alarm_facehide = pygame.mixer.Sound("faudio.mp3")   # Face hidden/covered alarm
-alarm_phone = pygame.mixer.Sound("paudio.mp3")      # Phone alarm
 
-# Track active audio state ('sleep', 'facehide', 'phone', or None)
-current_playing = None
+ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+AUDIO_FILES = {
+    "sleep": ROOT / "alarm.mp3",
+    "facehide": ROOT / "faudio.mp3",
+    "phone": ROOT / "paudio.mp3",
+}
 
-# Initialize Camera, Face Mesh, and YOLO Model
-cap = cv2.VideoCapture(0)
-face_detector = FaceMeshDetector(maxFaces=1)
-phone_detector = YOLO("yolov8n.pt")  # COCO pre-trained lightweight model
 
-# COCO Dataset Class Names
-classNames = phone_detector.names  # Class '67' is 'cell phone' in standard COCO
+def load_alarm(name: str):
+    path = AUDIO_FILES.get(name)
+    if path is None or not path.exists():
+        return None
+    return pygame.mixer.Sound(str(path))
 
-# Landmark Indices for Sleep Detection
-LEFT_EYE_TOP = 159
-LEFT_EYE_BOTTOM = 145
-FACE_LEFT = 130
-FACE_RIGHT = 243
 
-# Frame Counters & Thresholds
-closed_frames = 0
-SLEEP_THRESHOLD_FRAMES = 15
+def play_alarm(alarm_name: str, current_playing: str, audio_busy: bool, sounds):
+    if audio_busy or alarm_name not in sounds or sounds[alarm_name] is None:
+        return current_playing
+    sounds[alarm_name].play(0)
+    return alarm_name
 
-covered_frames = 0
-COVER_THRESHOLD_FRAMES = 20  # ~0.6 seconds of missing face triggers warning
 
-while True:
-    success, img = cap.read()
-    if not success:
-        break
+def main():
+    audio_available = True
+    try:
+        pygame.mixer.init()
+    except pygame.error:
+        print("Audio device unavailable; continuing without sound alerts.")
+        audio_available = False
 
-    # Check if ANY sound is currently playing to completion
-    is_audio_busy = pygame.mixer.get_busy()
+    sounds = {
+        "sleep": load_alarm("sleep") if audio_available else None,
+        "facehide": load_alarm("facehide") if audio_available else None,
+        "phone": load_alarm("phone") if audio_available else None,
+    }
 
-    # If audio finished playing, reset tracking state to None
-    if not is_audio_busy:
-        current_playing = None
+    current_playing = None
 
-    # ------------------- 1. SLEEP & FACE COVER DETECTION -------------------
-    img, faces = face_detector.findFaceMesh(img, draw=False)
-    is_sleepy = False
-    is_face_covered = False
+    model_path = ROOT / "yolov8n.pt"
+    if not model_path.exists():
+        raise FileNotFoundError(f"YOLO model not found: {model_path}")
 
-    if faces:
-        # Face visible -> Reset covered frames counter
-        covered_frames = 0
-        face = faces[0]
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        raise RuntimeError("Could not open webcam. Please check camera permissions or availability.")
 
-        eye_dist, _ = face_detector.findDistance(face[LEFT_EYE_TOP], face[LEFT_EYE_BOTTOM])
-        face_dist, _ = face_detector.findDistance(face[FACE_LEFT], face[FACE_RIGHT])
+    face_detector = FaceMeshDetector(maxFaces=1)
+    phone_detector = YOLO(str(model_path))
+    class_names = getattr(phone_detector, "names", {}) or {}
 
-        # Eye Aspect Ratio calculation
-        ratio = (eye_dist / face_dist) * 100
+    LEFT_EYE_TOP = 159
+    LEFT_EYE_BOTTOM = 145
+    FACE_LEFT = 130
+    FACE_RIGHT = 243
 
-        if ratio < 11.0:
-            closed_frames += 1
-        else:
-            closed_frames = 0
+    closed_frames = 0
+    SLEEP_THRESHOLD_FRAMES = 15
+    covered_frames = 0
+    COVER_THRESHOLD_FRAMES = 20
 
-        if closed_frames >= SLEEP_THRESHOLD_FRAMES:
-            is_sleepy = True
+    try:
+        while True:
+            success, img = cap.read()
+            if not success:
+                break
 
-        cvzone.putTextRect(img, f"Eye Ratio: {int(ratio)}", (30, 40), scale=1, thickness=1)
+            is_audio_busy = pygame.mixer.get_busy() if audio_available else False
+            if not is_audio_busy:
+                current_playing = None
 
-    else:
-        # Face missing/covered -> Increment covered frames counter
-        closed_frames = 0
-        covered_frames += 1
-        
-        if covered_frames >= COVER_THRESHOLD_FRAMES:
-            is_face_covered = True
+            img, faces = face_detector.findFaceMesh(img, draw=False)
+            is_sleepy = False
+            is_face_covered = False
 
-    # ------------------- 2. PHONE DETECTION -------------------
-    results = phone_detector.predict(img, stream=True, verbose=False)
-    phone_detected = False
+            if faces:
+                covered_frames = 0
+                face = faces[0]
 
-    for r in results:
-        boxes = r.boxes
-        for box in boxes:
-            cls_id = int(box.cls[0])
-            conf = float(box.conf[0])
+                eye_dist, _ = face_detector.findDistance(face[LEFT_EYE_TOP], face[LEFT_EYE_BOTTOM])
+                face_dist, _ = face_detector.findDistance(face[FACE_LEFT], face[FACE_RIGHT])
 
-            if classNames[cls_id] == "cell phone" and conf > 0.5:
-                phone_detected = True
-                
-                # Bounding box visual
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 255), 2)
-                cvzone.putTextRect(img, f"Phone detected! {int(conf*100)}%", (x1, max(y1 - 10, 30)), scale=1, thickness=1, colorR=(255, 0, 255))
+                if face_dist <= 0:
+                    face_dist = 1
 
-    # ------------------- 3. ALARM LOGIC & DISPLAY -------------------
-    
-    # Priority 1: Face covered warning
-    if is_face_covered:
-        cvzone.putTextRect(img, "DONT COVER YOUR FACE!", (50, 100), scale=2, thickness=3, colorR=(0, 0, 255))
-        if not is_audio_busy:
-            alarm_facehide.play(0)  # Play full track once
-            current_playing = 'facehide'
+                ratio = (eye_dist / face_dist) * 100
 
-    # Priority 2: Sleep warning
-    elif is_sleepy:
-        cvzone.putTextRect(img, "WAKE UP & STUDY!", (50, 100), scale=2, thickness=3, colorR=(0, 0, 255))
-        if not is_audio_busy:
-            alarm_sleep.play(0)  # Play full track once
-            current_playing = 'sleep'
+                if ratio < 11.0:
+                    closed_frames += 1
+                else:
+                    closed_frames = 0
 
-    # Priority 3: Phone warning
-    elif phone_detected:
-        cvzone.putTextRect(img, "PUT THE PHONE AWAY!", (50, 100), scale=2, thickness=3, colorR=(0, 165, 255))
-        if not is_audio_busy:
-            alarm_phone.play(0)  # Play full track once
-            current_playing = 'phone'
+                if closed_frames >= SLEEP_THRESHOLD_FRAMES:
+                    is_sleepy = True
 
-    # Display active warning overlay if audio is still finishing up
-    elif is_audio_busy:
-        if current_playing == 'facehide':
-            cvzone.putTextRect(img, "DONT COVER YOUR FACE!", (50, 100), scale=2, thickness=3, colorR=(0, 0, 255))
-        elif current_playing == 'sleep':
-            cvzone.putTextRect(img, "WAKE UP & STUDY!", (50, 100), scale=2, thickness=3, colorR=(0, 0, 255))
-        elif current_playing == 'phone':
-            cvzone.putTextRect(img, "PUT THE PHONE AWAY!", (50, 100), scale=2, thickness=3, colorR=(0, 165, 255))
+                cvzone.putTextRect(img, f"Eye Ratio: {int(ratio)}", (30, 40), scale=1, thickness=1)
+            else:
+                closed_frames = 0
+                covered_frames += 1
 
-    cv2.imshow("Smart Study Monitor", img)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+                if covered_frames >= COVER_THRESHOLD_FRAMES:
+                    is_face_covered = True
 
-cap.release()
-cv2.destroyAllWindows()
-#by Dibyendu pradhan
-# https://dibyendup.netlify.app
+            results = phone_detector.predict(img, stream=True, verbose=False)
+            phone_detected = False
+
+            for r in results:
+                if r.boxes is None:
+                    continue
+                for box in r.boxes:
+                    if len(box.cls) == 0 or len(box.conf) == 0:
+                        continue
+
+                    cls_id = int(box.cls[0])
+                    conf = float(box.conf[0])
+
+                    if str(class_names.get(cls_id, "")).lower() == "cell phone" and conf > 0.5:
+                        phone_detected = True
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 255), 2)
+                        cvzone.putTextRect(
+                            img,
+                            f"Phone detected! {int(conf * 100)}%",
+                            (x1, max(y1 - 10, 30)),
+                            scale=1,
+                            thickness=1,
+                            colorR=(255, 0, 255),
+                        )
+
+            if is_face_covered:
+                cvzone.putTextRect(img, "DONT COVER YOUR FACE!", (50, 100), scale=2, thickness=3, colorR=(0, 0, 255))
+                if not is_audio_busy:
+                    current_playing = play_alarm("facehide", current_playing, is_audio_busy, sounds)
+            elif is_sleepy:
+                cvzone.putTextRect(img, "WAKE UP & STUDY!", (50, 100), scale=2, thickness=3, colorR=(0, 0, 255))
+                if not is_audio_busy:
+                    current_playing = play_alarm("sleep", current_playing, is_audio_busy, sounds)
+            elif phone_detected:
+                cvzone.putTextRect(img, "PUT THE PHONE AWAY!", (50, 100), scale=2, thickness=3, colorR=(0, 165, 255))
+                if not is_audio_busy:
+                    current_playing = play_alarm("phone", current_playing, is_audio_busy, sounds)
+            elif is_audio_busy and current_playing:
+                if current_playing == "facehide":
+                    cvzone.putTextRect(img, "DONT COVER YOUR FACE!", (50, 100), scale=2, thickness=3, colorR=(0, 0, 255))
+                elif current_playing == "sleep":
+                    cvzone.putTextRect(img, "WAKE UP & STUDY!", (50, 100), scale=2, thickness=3, colorR=(0, 0, 255))
+                elif current_playing == "phone":
+                    cvzone.putTextRect(img, "PUT THE PHONE AWAY!", (50, 100), scale=2, thickness=3, colorR=(0, 165, 255))
+
+            cv2.imshow("Smart Study Monitor", img)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
+        if audio_available:
+            pygame.mixer.quit()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (FileNotFoundError, RuntimeError) as exc:
+        print(f"Error: {exc}")
+        raise SystemExit(1)
+    except KeyboardInterrupt:
+        print("Application stopped by user.")

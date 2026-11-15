@@ -1,0 +1,47 @@
+name: Build Windows executable
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "app.py"
+      - "requirements.txt"
+      - "build-windows.ps1"
+      - "yolov8n.pt"
+      - "alarm.mp3"
+      - "faudio.mp3"
+      - "paudio.mp3"
+      - ".github/workflows/build-windows.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository and model weights
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Build executable
+        shell: pwsh
+        run: ./build-windows.ps1
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartStudyMonitor-Windows-x64
+          path: dist/SmartStudyMonitor.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

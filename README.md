@@ -26,6 +26,7 @@ When a distraction is detected, the app shows a warning on screen and plays an a
 ```text
 Smart_Study_Monitor-main/
 ├── app.py
+├── android/
 ├── alarm.mp3
 ├── faudio.mp3
 ├── paudio.mp3
@@ -118,6 +119,64 @@ python app.py
 ```
 
 The camera window will open. Press `Q` to quit.
+
+## Build a Linux executable
+
+On Linux, install the project dependencies and PyInstaller in the virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+If `yolov8n.pt` was checked out as a Git LFS pointer, install Git LFS and fetch the actual model before building:
+
+```bash
+sudo apt install git-lfs
+git lfs install
+git lfs pull
+```
+
+Build the standalone executable:
+
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+The executable will be created at `dist/SmartStudyMonitor`. Run it from a terminal with:
+
+```bash
+./dist/SmartStudyMonitor
+```
+
+The one-file executable includes the YOLO model and alert audio files. It still requires a compatible Linux system with webcam access and the system libraries needed by OpenCV, MediaPipe, and audio playback. PyInstaller builds are specific to the operating system and CPU architecture used to create them.
+
+## Build a Windows executable
+
+On Windows 10 or 11, install Python 3.12 and Git LFS, then run these commands from the project folder in PowerShell:
+
+```powershell
+git lfs install
+git lfs pull
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+.\build-windows.ps1
+```
+
+The executable will be created at `dist\SmartStudyMonitor.exe`. A Windows executable must be built on Windows; it cannot be produced by the Linux build script.
+
+Alternatively, push the repository to GitHub and run the **Build Windows executable** workflow from the Actions tab. Download the `SmartStudyMonitor-Windows-x64` artifact from the completed workflow run. The workflow retains artifacts for 14 days.
+
+## Build an Android APK
+
+The native Android app is in `android/`. It uses CameraX and MediaPipe for front-camera face/eye and phone detection. Follow [android/README.md](./android/README.md) to build locally; its phone detector model is downloaded separately during setup.
+
+Alternatively, push the repository to GitHub and run **Build Android APK** from the Actions tab. Download `SmartStudyMonitor-Android-debug` from the completed workflow run. Install the APK on an Android 8.0+ phone, allow camera permission, and start monitoring. The workflow's debug APK is for testing/sideloading, not Play Store distribution, and artifacts are retained for 14 days.
 
 ---
 
