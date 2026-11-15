@@ -21,22 +21,28 @@ if ($ModelFile.Length -lt 1024 -and
     throw "yolov8n.pt is a Git LFS pointer, not model weights. Install Git LFS and run 'git lfs pull'."
 }
 
-& $Python -m PyInstaller `
-    --noconfirm `
-    --clean `
-    --onefile `
-    --name SmartStudyMonitor `
-    --add-data "yolov8n.pt;." `
-    --add-data "alarm.mp3;." `
-    --add-data "faudio.mp3;." `
-    --add-data "paudio.mp3;." `
-    --collect-all ultralytics `
-    --collect-all mediapipe `
-    --collect-all torchvision `
-    app.py
+function Build-Executable([string]$Name, [string]$EntryPoint) {
+    & $Python -m PyInstaller `
+        --noconfirm `
+        --clean `
+        --onefile `
+        --name $Name `
+        --add-data "yolov8n.pt;." `
+        --add-data "alarm.mp3;." `
+        --add-data "faudio.mp3;." `
+        --add-data "paudio.mp3;." `
+        --collect-all ultralytics `
+        --collect-all mediapipe `
+        --collect-all torchvision `
+        $EntryPoint
 
-if ($LASTEXITCODE -ne 0) {
-    throw "PyInstaller failed with exit code $LASTEXITCODE."
+    if ($LASTEXITCODE -ne 0) {
+        throw "PyInstaller failed for $Name with exit code $LASTEXITCODE."
+    }
 }
 
-Write-Host "Executable created: $Root\dist\SmartStudyMonitor.exe"
+Build-Executable "SmartStudyMonitor" "app.py"
+Build-Executable "SmartStudyMonitorLite" "app_lite.py"
+
+Write-Host "Original executable: $Root\dist\SmartStudyMonitor.exe"
+Write-Host "Lite executable:     $Root\dist\SmartStudyMonitorLite.exe"

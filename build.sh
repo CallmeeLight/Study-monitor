@@ -27,20 +27,28 @@ if ! "$PYTHON" -m PyInstaller --version >/dev/null 2>&1; then
     exit 1
 fi
 
-"$PYTHON" -m PyInstaller \
-    --noconfirm \
-    --clean \
-    --onefile \
-    --name SmartStudyMonitor \
-    --add-data "yolov8n.pt:." \
-    --add-data "alarm.mp3:." \
-    --add-data "faudio.mp3:." \
-    --add-data "paudio.mp3:." \
-    --collect-all ultralytics \
-    --collect-all mediapipe \
-    --collect-all torchvision \
-    app.py
+build_executable() {
+    local name="$1"
+    local entry_point="$2"
+
+    "$PYTHON" -m PyInstaller \
+        --noconfirm \
+        --clean \
+        --onefile \
+        --name "$name" \
+        --add-data "yolov8n.pt:." \
+        --add-data "alarm.mp3:." \
+        --add-data "faudio.mp3:." \
+        --add-data "paudio.mp3:." \
+        --collect-all ultralytics \
+        --collect-all mediapipe \
+        --collect-all torchvision \
+        "$entry_point"
+}
+
+build_executable SmartStudyMonitor app.py
+build_executable SmartStudyMonitorLite app_lite.py
 
 echo
-echo "Executable created: $ROOT/dist/SmartStudyMonitor"
-echo "Run it with: $ROOT/dist/SmartStudyMonitor"
+echo "Original executable: $ROOT/dist/SmartStudyMonitor"
+echo "Lite executable:     $ROOT/dist/SmartStudyMonitorLite"

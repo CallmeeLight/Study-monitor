@@ -146,15 +146,21 @@ chmod +x build.sh
 ./build.sh
 ```
 
-The executable will be created at `dist/SmartStudyMonitor`. Run it from a terminal with:
+The original and Lite executables will be created at `dist/SmartStudyMonitor` and `dist/SmartStudyMonitorLite`. Run either from a terminal, for example:
 
 ```bash
 ./dist/SmartStudyMonitor
+./dist/SmartStudyMonitorLite
 ```
 
 The one-file executable includes the YOLO model and alert audio files. It still requires a compatible Linux system with webcam access and the system libraries needed by OpenCV, MediaPipe, and audio playback. PyInstaller builds are specific to the operating system and CPU architecture used to create them.
 
 ## Build a Windows executable
+
+The project has two desktop builds:
+
+- **Original:** Default camera resolution, phone detection on every frame, and the original YOLO input size.
+- **Lite:** Requests 640×480 camera capture, uses 320-pixel YOLO inference, and checks for phones every third frame. This reduces processing load but can make phone alerts slower and less reliable. It uses the same AI libraries and models, so its baseline memory use is still substantial; it is not guaranteed to run smoothly with only 4 GB of RAM.
 
 On Windows 10 or 11, install Python 3.12 and Git LFS, then run these commands from the project folder in PowerShell:
 
@@ -168,9 +174,9 @@ python -m pip install -r requirements.txt
 .\build-windows.ps1
 ```
 
-The executable will be created at `dist\SmartStudyMonitor.exe`. A Windows executable must be built on Windows; it cannot be produced by the Linux build script.
+The executables will be created at `dist\SmartStudyMonitor.exe` and `dist\SmartStudyMonitorLite.exe`. A Windows executable must be built on Windows; it cannot be produced by the Linux build script.
 
-Alternatively, push the repository to GitHub and run the **Build Windows executable** workflow from the Actions tab. Download the `SmartStudyMonitor-Windows-x64` artifact from the completed workflow run. The workflow retains artifacts for 14 days.
+Alternatively, push the repository to GitHub and run the **Build Windows executable** workflow from the Actions tab. Download the `SmartStudyMonitor-Windows-x64` artifact from the completed workflow run; it contains separate ZIP files for both versions. The workflow retains artifacts for 14 days.
 
 ## Build an Android APK
 

@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - "app.py"
+      - "app_lite.py"
       - "requirements.txt"
       - "build-windows.ps1"
       - "yolov8n.pt"
@@ -37,11 +38,19 @@ jobs:
         shell: pwsh
         run: ./build-windows.ps1
 
+      - name: Package executables
+        shell: pwsh
+        run: |
+          Compress-Archive -LiteralPath dist/SmartStudyMonitor.exe -DestinationPath dist/SmartStudyMonitor-Windows-x64.zip
+          Compress-Archive -LiteralPath dist/SmartStudyMonitorLite.exe -DestinationPath dist/SmartStudyMonitorLite-Windows-x64.zip
+
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
           name: SmartStudyMonitor-Windows-x64
-          path: dist/SmartStudyMonitor.exe
+          path: |
+            dist/SmartStudyMonitor-Windows-x64.zip
+            dist/SmartStudyMonitorLite-Windows-x64.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
